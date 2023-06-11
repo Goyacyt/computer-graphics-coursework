@@ -37,6 +37,12 @@ class MyCanvas(QGraphicsView):
         self.temp_item = None
 
         self.pen_color=QColor(255,0,0)
+
+        #平移的两个坐标
+        self.x0=0
+        self.y0=0
+        self.x1=0
+        self.y1=0
     
     def set_pen_color(self,color):
         self.pen_color=color
@@ -70,17 +76,18 @@ class MyCanvas(QGraphicsView):
         self.temp_algorithm = algorithm
         self.temp_id = item_id
 
-    def start_translate(self,item_id):
-        self.status=='translate'
-        self.temp_id = item_id
+    def start_translate(self):
+        self.status='translate'
+        self.temp_id = self.selected_id
+        print(self.temp_id)
 
-    def start_scale(self,item_id):
-        self.status=='scale'
-        self.temp_id = item_id
+    def start_scale(self):
+        self.status='scale'
+        self.temp_id = self.selected_id
 
-    def start_rotate(self,item_id):
-        self.status=='rotate'
-        self.temp_id = item_id
+    def start_rotate(self):
+        self.status='rotate'
+        self.temp_id = self.selected_id
 
     def finish_draw(self):
         self.temp_id = self.main_window.get_id()
@@ -91,6 +98,7 @@ class MyCanvas(QGraphicsView):
             self.selected_id = ''
 
     def selection_changed(self, selected):
+        print("selection changed")
         self.main_window.statusBar().showMessage('图元选择： %s' % selected)
         if self.selected_id != '':
             self.item_dict[self.selected_id].selected = False
@@ -105,6 +113,7 @@ class MyCanvas(QGraphicsView):
         pos = self.mapToScene(event.localPos().toPoint())
         x = int(pos.x())
         y = int(pos.y())
+        print("self status:",self.status)
         if self.status == 'line' or self.status=="ellipse":
             self.temp_item = MyItem(self.temp_id, self.status, [[x, y], [x, y]], self.temp_algorithm,self.pen_color)
             self.scene().addItem(self.temp_item)
@@ -122,7 +131,13 @@ class MyCanvas(QGraphicsView):
                 else:
                     self.temp_item.p_list.append([x, y])
         elif self.status=="translate":
-            pass  
+            print("translate")
+            self.temp_id=self.selected_id
+            self.temp_item=self.item_dict[self.temp_id]
+            if self.temp_item==None:
+                print("error!the selected item not exist")
+            else:
+                self.x0,self.y0=x,y
         self.updateScene([self.sceneRect()])
         super().mousePressEvent(event)
 
@@ -134,6 +149,13 @@ class MyCanvas(QGraphicsView):
             self.temp_item.p_list[1] = [x, y]
         elif self.status == 'ellipse':
             self.temp_item.p_list[1] = [x, y]
+        elif self.status=="translate":
+            self.x1,self.y1=x,y
+            dx=self.x1-self.x0
+            dy=self.y1-self.y0
+            self.temp_item.p_list=alg.translate(self.item_dict[self.temp_id].p_list,dx,dy)
+            self.x0,self.y0=x,y
+        
         self.updateScene([self.sceneRect()])
         super().mouseMoveEvent(event)
 
@@ -148,6 +170,10 @@ class MyCanvas(QGraphicsView):
             self.list_widget.addItem(self.temp_id)
             self.temp_item=None
             self.finish_draw()
+        elif self.status=="translate":
+            self.item_dict[self.temp_id]=self.temp_item
+            self.updateScene([self.sceneRect()])
+            self.temp_item=None
         super().mouseReleaseEvent(event)
 
 
@@ -173,6 +199,8 @@ class MyItem(QGraphicsItem):
         self.pen_color=pen_color
 
     def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: Optional[QWidget] = ...) -> None:
+        """print("paint")  
+        print(self.item_type)"""
         painter.setPen(self.pen_color)
         if self.item_type == 'line':
             item_pixels = alg.draw_line(self.p_list, self.algorithm)
@@ -212,20 +240,20 @@ class MyItem(QGraphicsItem):
                 return QRectF(x,y,2,2)
             else:
                 x,y=self.p_list[0]
-                w,h=0,0
+                w,h=x,y
                 for i in range(1,len(self.p_list)):
                     nx,ny=self.p_list[i]
                     if nx<x:
                         x=nx
                     if ny<y:
                         y=ny
-                    if nx>x:
+                    if nx>w:
                         w=nx
-                    if ny>y:
+                    if ny>h:
                         h=ny
                 w=w-x
                 h=h-y
-                return QRectF(x-1,y-1,w+2,h+2)
+                return QRectF(round(x-1),round(y-1),round(w+2),round(h+2))
 
 
 
@@ -287,6 +315,9 @@ class MainWindow(QMainWindow):
         ellipse_act.triggered.connect(self.ellipse_action)
         curve_bezier_act.triggered.connect(self.curve_bezier_action)
         curve_b_spline_act.triggered.connect(self.curve_b_spline_action)
+        translate_act.triggered.connect(self.translate_action)
+        rotate_act.triggered.connect(self.rotate_action)
+        scale_act.triggered.connect(self.scale_action)
         self.list_widget.currentTextChanged.connect(self.canvas_widget.selection_changed)
 
         # 设置主窗口的布局
@@ -358,6 +389,18 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage('B-spline算法绘制曲线')
         self.list_widget.clearSelection()
         self.canvas_widget.clear_selection()
+
+    def translate_action(self):
+        self.canvas_widget.start_translate()
+        self.statusBar().showMessage('平移图元')
+    
+    def rotate_action(self):
+        self.canvas_widget.start_rotate()
+        self.statusBar().showMessage('旋转图元')
+    
+    def scale_action(self):
+        self.canvas_widget.start_scale()
+        self.statusBar().showMessage('缩放图元')
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
