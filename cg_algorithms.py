@@ -360,7 +360,7 @@ def clip(p_list, x_min, y_min, x_max, y_max, algorithm):
             elif p[i]==0:
                 if q[i]<0:
                     return [[0,0],[0,0]]
-            if u0>y1:
+            if u0>u1:
                 return [[0,0],[0,0]]
         
         r_x0=round(x0+u0*(x1-x0))
